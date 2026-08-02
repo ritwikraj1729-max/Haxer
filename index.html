@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hacker Typer // Desktop Windows</title>
+    <style>
+        :root {
+            --bg: #000000;
+            --fg: #33ff33;
+            --glow: #33ff33;
+            --cursor: #33ff33;
+            --dim: rgba(51, 255, 51, 0.35);
+            --toolbar-bg: #0a0a0a;
+            --toolbar-border: #1a1a1a;
+            --font-size: 16px;
+            --window-bg: #050505;
+            --window-border: #1a1a1a;
+            --titlebar-bg: #0d0d0d;
+            --titlebar-text: #666;
+            --taskbar-bg: #0a0a0a;
+            --taskbar-border: #1a1a1a;
+            --scan-line-opacity: 0.03;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--bg);
+            overflow: hidden;
+            font-family: "Consolas", "Courier New", "Fira Code", monospace;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* Scan line overlay */
+        #scan-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+            z-index: 9999;
+            background: repeating-linear-gradient(0deg,
+                    transparent,
+                    transparent 2px,
+                    rgba(0, 0, 0, 0.015) 2px,
+                    rgba(0, 0, 0, 0.015) 4px);
+            animation: scanMove 8s linear infinite;
+            opacity: 0.7;
+        }
+        @keyframes scanMove {
+            0% { background-position: 0 0; }
+            100% { background-position: 0 100px; }
+        }
+
+        /* ============================================================
+           TOOLBAR (top)
+           ============================================================ */
+        #toolbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 48px;
+            z-index: 100;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px;
+            padding: 0 12px;
+            background: var(--toolbar-bg);
+            border-bottom: 1px solid var(--toolbar-border);
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
+        }
+
+        .tool-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: #888;
+            font-size: 12px;
+        }
+        .tool-group label {
+            color: #666;
+            white-space: nowrap;
+        }
+
+        select,
+        input[type="range"],
+        button {
+            background: #111;
+            color: var(--fg);
+            border: 1px solid #2a2a2a;
+            border-radius: 4px;
+            padding: 5px 8px;
+            font-family: inherit;
+            font-size: 12px;
+            cursor: pointer;
+            outline: none;
+            transition: box-shadow 0.2s ease, border-color 0.2s ease;
+        }
+        select:focus,
+        input:focus,
+        button:focus {
+            border-color: var(--fg);
+            box-shadow: 0 0 6px var(--dim);
+        }
+        button:hover {
+            border-color: var(--fg);
+            box-shadow: 0 0 8px var(--dim);
+        }
+        button:active {
+            transform: scale(0.96);
+        }
+
+        input[type="range"] {
+            -webkit-appearance: none;
+            width: 90px;
+            height: 4px;
+            background: #222;
+            border: none;
+            border-radius: 2px;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--fg);
+            box-shadow: 0 0 6px var(--glow);
+            cursor: pointer;
+        }
+
+        #autoTypeBtn.active {
+            background: #0a2a0a;
+            border-color: var(--fg);
+            box-shadow: 0 0 12px var(--glow);
+            animation: pulseBtn 1.5s ease-in-out infinite;
+        }
+        @keyframes pulseBtn {
+            0%, 100% { box-shadow: 0 0 8px var(--dim); }
+            50% { box-shadow: 0 0 20px var(--glow), 0 0 30px var(--dim); }
+        }
+
+        /* ============================================================
+           DESKTOP AREA
+           ============================================================ */
+        #desktop {
+            position: absolute;
+            top: 48px;
+            left: 0;
+            right: 0;
+            bottom: 36px;
+            overflow: hidden;
+            background: radial-gradient(circle at 50% 30%, #0a0a0a, #000000);
+        }
+
+        /* ============================================================
+           TERMINAL WINDOW
+           ============================================================ */
+        .terminal-window {
+            position: absolute;
+            min-width: 280px;
+            min-height: 180px;
+            background: var(--window-bg);
+            border: 1px solid var(--window-border);
+            border-radius: 6px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.7), 0 0 15px var(--dim);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            z-index: 10;
+            transition: box-shadow 0.15s;
+        }
+        .terminal-window.active {
+            z-index: 50;
+            border-color: var(--fg);
+            box-shadow: 0 4px 25px rgba(0, 0, 0, 0.8), 0 0 20px var(--dim), 0 0 5px var(--glow);
+        }
+        .terminal-window.maximized {
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            border-radius: 0;
+            border: none;
+            box-shadow: none;
+            z-index: 60;
+        }
+
+        /* Title bar */
+        .window-titlebar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--titlebar-bg);
+            padding: 4px 8px;
+            border-bottom: 1px solid #111;
+            cursor: move;
+            flex-shrink: 0;
+            height: 28px;
+        }
+        .window-title {
+            font-size: 11px;
+            color: var(--titlebar-text);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            pointer-events: none;
+            letter-spacing: 0.5px;
+        }
+        .window-controls {
+            display: flex;
+            gap: 4px;
+            flex-shrink: 0;
+            z-index: 5;
+        }
+        .win-btn {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #222;
+            color: #888;
+            transition: background 0.15s, color 0.15s;
+            line-height: 1;
+        }
+        .win-btn:hover {
+            background: #444;
+            color: #fff;
+        }
+        .win-btn.close:hover {
+            background: #ff4444;
+            color: #fff;
+        }
+        .win-btn.minimize:hover {
+            background: #f0b000;
+            color: #000;
+        }
+        .win-btn.maximize:hover {
+            background: #33ff33;
+            color: #000;
+        }
+
+        /* Terminal body */
+        .window-terminal {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding: 12px 16px 20px 16px;
+            color: var(--fg);
+            font-size: var(--font-size);
+            line-height: 1.5;
+            text-shadow: 0 0 5px var(--glow), 0 0 10px var(--glow);
+            scroll-behavior: smooth;
+            white-space: pre-wrap;
+            word-break: break-word;
+            cursor: text;
+        }
+        .window-terminal::-webkit-scrollbar {
+            width: 6px;
+        }
+        .window-terminal::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .window-terminal::-webkit-scrollbar-thumb {
+            background: var(--dim);
+            border-radius: 3px;
+        }
+
+        .line {
+            display: block;
+            animation: lineIn 0.12s ease;
+        }
+        @keyframes lineIn {
+            from { opacity: 0; transform: translateY(2px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .cursor {
+            display: inline-block;
+            width: 0.55em;
+            height: 1.05em;
+            background: var(--cursor);
+            box-shadow: 0 0 8px var(--glow);
+            vertical-align: text-bottom;
+            margin-left: 2px;
+            animation: blink 1s steps(1) infinite;
+        }
+        @keyframes blink {
+            0%, 49% { opacity: 1; }
+            50%, 100% { opacity: 0; }
+        }
+        .banner {
+            opacity: 0.85;
+            margin-bottom: 10px;
+            display: block;
+        }
+
+        .glitch-flash {
+            animation: glitchFlash 0.15s ease-out;
+        }
+        @keyframes glitchFlash {
+            0% { opacity: 0.3; filter: blur(1px) hue-rotate(30deg); }
+            40% { opacity: 1.2; filter: blur(0px) hue-rotate(-15deg); }
+            100% { opacity: 1; filter: blur(0) hue-rotate(0); }
+        }
+
+        /* Resize handles */
+        .resize-handle {
+            position: absolute;
+            z-index: 55;
+        }
+        .resize-handle.top { top: -4px; left: 0; right: 0; height: 8px; cursor: n-resize; }
+        .resize-handle.bottom { bottom: -4px; left: 0; right: 0; height: 8px; cursor: s-resize; }
+        .resize-handle.left { left: -4px; top: 0; bottom: 0; width: 8px; cursor: w-resize; }
+        .resize-handle.right { right: -4px; top: 0; bottom: 0; width: 8px; cursor: e-resize; }
+        .resize-handle.corner { width: 12px; height: 12px; }
+        .resize-handle.top-left { top: -6px; left: -6px; cursor: nw-resize; }
+        .resize-handle.top-right { top: -6px; right: -6px; cursor: ne-resize; }
+        .resize-handle.bottom-left { bottom: -6px; left: -6px; cursor: sw-resize; }
+        .resize-handle.bottom-right { bottom: -6px; right: -6px; cursor: se-resize; }
+
+        /* ============================================================
+           TASKBAR
+           ============================================================ */
+        #taskbar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 36px;
+            background: var(--taskbar-bg);
+            border-top: 1px solid var(--taskbar-border);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 0 8px;
+            z-index: 200;
+            overflow-x: auto;
+        }
+        .taskbar-item {
+            padding: 4px 12px;
+            font-size: 11px;
+            color: #666;
+            background: #0d0d0d;
+            border: 1px solid #1a1a1a;
+            border-radius: 4px;
+            cursor: pointer;
+            white-space: nowrap;
+            max-width: 160px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            transition: color 0.15s, background 0.15s;
+            flex-shrink: 0;
+        }
+        .taskbar-item.active {
+            color: var(--fg);
+            border-color: var(--fg);
+            box-shadow: 0 0 8px var(--dim);
+            background: #111;
+        }
+        .taskbar-item:hover {
+            color: #ccc;
+            background: #1a1a1a;
+        }
+
+        /* ============================================================
+           RESPONSIVE
+           ============================================================ */
+        @media (max-width: 760px) {
+            #toolbar {
+                height: auto;
+                flex-wrap: wrap;
+                padding: 6px;
+                gap: 6px;
+            }
+            .tool-group { font-size: 11px; }
+            select, button { font-size: 11px; padding: 4px 6px; }
+            input[type="range"] { width: 55px; }
+            #desktop { top: 100px; bottom: 36px; }
+            .terminal-window { min-width: 220px; min-height: 140px; }
+            .window-titlebar { height: 24px; padding: 2px 6px; }
+            .window-title { font-size: 10px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="scan-overlay"></div>
+
+    <!-- ================= TOOLBAR ================= -->
+    <div id="toolbar" role="toolbar" aria-label="Terminal controls">
+        <div class="tool-group">
+            <label for="modeSelect">Mode</label>
+            <select id="modeSelect" aria-label="Select typing mode">
+                <option value="code">Code</option>
+                <option value="binary">Binary</option>
+                <option value="terminal">Terminal</option>
+            </select>
+        </div>
+        <div class="tool-group">
+            <label for="themeSelect">Theme</label>
+            <select id="themeSelect" aria-label="Select color theme">
+                <option value="green">Green</option>
+                <option value="blue">Blue</option>
+                <option value="red">Red</option>
+                <option value="amber">Amber</option>
+                <option value="white">White</option>
+            </select>
+        </div>
+        <div class="tool-group">
+            <label for="speedSlider">Speed</label>
+            <input type="range" id="speedSlider" min="1" max="10" value="5" aria-label="Typing speed">
+        </div>
+        <div class="tool-group">
+            <label for="fontSlider">Font</label>
+            <input type="range" id="fontSlider" min="12" max="32" value="16" aria-label="Font size">
+        </div>
+        <div class="tool-group">
+            <button id="autoTypeBtn" aria-pressed="false">Auto: Off</button>
+        </div>
+        <div class="tool-group">
+            <button id="soundToggle" aria-pressed="false">Sound: Off</button>
+        </div>
+        <div class="tool-group">
+            <button id="fullscreenBtn">Fullscreen</button>
+        </div>
+        <div class="tool-group">
+            <button id="clearBtn">Clear</button>
+        </div>
+        <div class="tool-group">
+            <button id="newWindowBtn" style="font-weight:bold;">+ New Window</button>
+        </div>
+    </div>
+
+    <!-- ================= DESKTOP ================= -->
+    <div id="desktop"></div>
+
+    <!-- ================= TASKBAR ================= -->
+    <div id="taskbar"></div>
+
+    <script>
+        (function() {
+            "use strict";
+
+            const desktop = document.getElementById('desktop');
+            const taskbar = document.getElementById('taskbar');
+            const modeSelect = document.getElementById('modeSelect');
+            const themeSelect = document.getElementById('themeSelect');
+            const speedSlider = document.getElementById('speedSlider');
+            const fontSlider = document.getElementById('fontSlider');
+            const autoTypeBtn = document.getElementById('autoTypeBtn');
+            const soundToggle = document.getElementById('soundToggle');
+            const fullscreenBtn = document.getElementById('fullscreenBtn');
+            const clearBtn = document.getElementById('clearBtn');
+            const newWindowBtn = document.getElementById('newWindowBtn');
+
+            let windows = [];
+            let activeWindowId = null;
+            let windowIdCounter = 1;
+            let soundOn = false;
+            let audioCtx = null;
+            let autoTypeInterval = null;
+            let autoTypeOn = false;
+            const MAX_LINES = 500;
+
+            /* ============================================================
+               THEMES
+               ============================================================ */
+            const THEMES = {
+                green: '#33ff33',
+                blue: '#33befd',
+                red: '#ff3b3b',
+                amber: '#ffb000',
+                white: '#e8e8e8'
+            };
+
+            function applyThemeColor(hex) {
+                document.documentElement.style.setProperty('--fg', hex);
+                document.documentElement.style.setProperty('--glow', hex);
+                document.documentElement.style.setProperty('--cursor', hex);
+                document.documentElement.style.setProperty('--dim', hexToRgba(hex, 0.35));
+            }
+
+            function hexToRgba(hex, alpha) {
+                let c = hex.replace('#', '');
+                if (c.length === 3) c = c.split('').map(ch => ch + ch).join('');
+                const num = parseInt(c, 16);
+                const r = (num >> 16) & 255, g = (num >> 8) & 255, b = num & 255;
+                return `rgba(${r},${g},${b},${alpha})`;
+            }
+
+            function setTheme(name) {
+                if (THEMES[name]) applyThemeColor(THEMES[name]);
+            }
+
+            /* ============================================================
+               TERMINAL WINDOW CLASS
+               ============================================================ */
+            class TerminalWindow {
+                constructor(id, title) {
+                    this.id = id;
+                    this.title = title || this.randomWindowName();
+                    this.contentBuffer = '';
+                    this.currentLineEl = null;
+                    this.cursorEl = null;
+                    this.totalLinesRendered = 0;
+                    this.element = null;
+                    this.terminalEl = null;
+                    this.titleEl = null;
+                    this.taskbarItem = null;
+                    this.isMinimized = false;
+                    this.isMaximized = false;
+                    this.prevBounds = { x: 100, y: 100, w: 600, h: 360 };
+
+                    this.buildWindow();
+                }
+
+                randomWindowName() {
+                    const names = [
+                        'root@kali:~#', 'exploit.py', 'reverse_shell.c', 'packet_sniff',
+                        'decryptor.js', 'port_scan.sh', 'payload_gen', 'sql_inject',
+                        'buffer_overflow', 'priv_esc.py', 'keylogger.c', 'net_recon',
+                        'hash_crack', 'dns_tunnel', 'fuzzer.rb', 'shellcode_asm'
+                    ];
+                    return names[Math.floor(Math.random() * names.length)] + '_' + Math.floor(Math.random() * 100);
+                }
+
+                buildWindow() {
+                    const win = document.createElement('div');
+                    win.className = 'terminal-window';
+                    win.setAttribute('data-window-id', this.id);
+                    win.style.left = this.prevBounds.x + 'px';
+                    win.style.top = this.prevBounds.y + 'px';
+                    win.style.width = this.prevBounds.w + 'px';
+                    win.style.height = this.prevBounds.h + 'px';
+
+                    const titlebar = document.createElement('div');
+                    titlebar.className = 'window-titlebar';
+                    titlebar.addEventListener('mousedown', (e) => this.onTitlebarMouseDown(e));
+
+                    const titleSpan = document.createElement('span');
+                    titleSpan.className = 'window-title';
+                    titleSpan.textContent = this.title;
+                    this.titleEl = titleSpan;
+                    titlebar.appendChild(titleSpan);
+
+                    const controls = document.createElement('div');
+                    controls.className = 'window-controls';
+
+                    const minBtn = document.createElement('button');
+                    minBtn.className = 'win-btn minimize';
+                    minBtn.innerHTML = '&#x2013;';
+                    minBtn.title = 'Minimize';
+                    minBtn.addEventListener('click', (e) => { e.stopPropagation(); this.minimize(); });
+                    controls.appendChild(minBtn);
+
+                    const maxBtn = document.createElement('button');
+                    maxBtn.className = 'win-btn maximize';
+                    maxBtn.innerHTML = '&#x25A1;';
+                    maxBtn.title = 'Maximize';
+                    maxBtn.addEventListener('click', (e) => { e.stopPropagation(); this.toggleMaximize(); });
+                    controls.appendChild(maxBtn);
+
+                    const closeBtn = document.createElement('button');
+                    closeBtn.className = 'win-btn close';
+                    closeBtn.innerHTML = '&#x2715;';
+                    closeBtn.title = 'Close';
+                    closeBtn.addEventListener('click', (e) => { e.stopPropagation(); this.close(); });
+                    controls.appendChild(closeBtn);
+
+                    titlebar.appendChild(controls);
+                    win.appendChild(titlebar);
+
+                    const term = document.createElement('div');
+                    term.className = 'window-terminal';
+                    term.addEventListener('click', () => this.handleTerminalClick());
+                    win.appendChild(term);
+                    this.terminalEl = term;
+
+                    ['top','bottom','left','right','top-left','top-right','bottom-left','bottom-right'].forEach(dir => {
+                        const handle = document.createElement('div');
+                        handle.className = `resize-handle ${dir}`;
+                        handle.addEventListener('mousedown', (e) => this.onResizeStart(e, dir));
+                        win.appendChild(handle);
+                    });
+
+                    desktop.appendChild(win);
+                    this.element = win;
+
+                    this.ensureCursor();
+                    const banner = pick(STARTUP_BANNERS);
+                    const bannerSpan = document.createElement('span');
+                    bannerSpan.className = 'line banner';
+                    bannerSpan.textContent = banner + '\n\n';
+                    term.insertBefore(bannerSpan, this.cursorEl);
+                    this.totalLinesRendered++;
+
+                    this.createTaskbarItem();
+
+                    win.addEventListener('mousedown', () => this.activate());
+                }
+
+                createTaskbarItem() {
+                    const item = document.createElement('div');
+                    item.className = 'taskbar-item';
+                    item.textContent = this.title;
+                    item.title = this.title;
+                    item.addEventListener('click', () => {
+                        if (this.isMinimized || this.isMaximized) this.restore();
+                        this.activate();
+                    });
+                    taskbar.appendChild(item);
+                    this.taskbarItem = item;
+                }
+
+                updateTaskbarItem() {
+                    if (this.taskbarItem) {
+                        this.taskbarItem.textContent = this.title;
+                        this.taskbarItem.classList.toggle('active', this.id === activeWindowId && !this.isMinimized);
+                    }
+                }
+
+                ensureCursor() {
+                    if (!this.cursorEl || !this.cursorEl.isConnected) {
+                        this.cursorEl = document.createElement('span');
+                        this.cursorEl.className = 'cursor';
+                        this.cursorEl.setAttribute('aria-hidden', 'true');
+                        if (this.terminalEl) this.terminalEl.appendChild(this.cursorEl);
+                    }
+                }
+
+                newLine(text) {
+                    const span = document.createElement('span');
+                    span.className = 'line';
+                    span.textContent = text;
+                    this.terminalEl.insertBefore(span, this.cursorEl);
+                    this.totalLinesRendered++;
+                    return span;
+                }
+
+                trimIfNeeded() {
+                    while (this.totalLinesRendered > MAX_LINES &&
+                        this.terminalEl.firstChild && this.terminalEl.firstChild !== this.cursorEl) {
+                        this.terminalEl.removeChild(this.terminalEl.firstChild);
+                        this.totalLinesRendered--;
+                    }
+                }
+
+                scrollToBottom() {
+                    if (this.terminalEl) this.terminalEl.scrollTop = this.terminalEl.scrollHeight;
+                }
+
+                revealChars(count) {
+                    const mode = modeSelect.value;
+                    for (let i = 0; i < count; i++) {
+                        if (this.contentBuffer.length === 0) {
+                            if (Math.random() < 0.2) {
+                                this.contentBuffer = generateLoadingSequence();
+                            } else {
+                                this.contentBuffer = generateBlock(mode);
+                            }
+                        }
+                        const ch = this.contentBuffer[0];
+                        this.contentBuffer = this.contentBuffer.slice(1);
+                        if (ch === '\n') {
+                            this.currentLineEl = null;
+                        } else {
+                            if (!this.currentLineEl || !this.currentLineEl.isConnected) {
+                                this.currentLineEl = this.newLine('');
+                            }
+                            if (this.currentLineEl) this.currentLineEl.textContent += ch;
+                        }
+                    }
+                    this.trimIfNeeded();
+                    this.ensureCursor();
+                    this.scrollToBottom();
+                }
+
+                handleTerminalClick() {
+                    this.activate();
+                    this.revealChars(charsPerKeypress());
+                    playClick();
+                }
+
+                activate() {
+                    if (this.isMinimized) this.restore();
+                    if (activeWindowId === this.id) return;
+                    windows.forEach(w => {
+                        w.element.classList.remove('active');
+                        w.updateTaskbarItem();
+                    });
+                    this.element.classList.add('active');
+                    this.element.style.zIndex = getNextZIndex();
+                    activeWindowId = this.id;
+                    this.updateTaskbarItem();
+                    this.scrollToBottom();
+                }
+
+                minimize() {
+                    if (this.isMinimized) return;
+                    if (this.isMaximized) this.restore();
+                    this.element.style.display = 'none';
+                    this.isMinimized = true;
+                    this.updateTaskbarItem();
+                    if (activeWindowId === this.id) {
+                        activeWindowId = null;
+                        const next = windows.find(w => !w.isMinimized);
+                        if (next) next.activate();
+                    }
+                }
+
+                restore() {
+                    if (!this.isMinimized && !this.isMaximized) return;
+                    this.element.style.display = 'flex';
+                    this.isMinimized = false;
+                    if (this.isMaximized) {
+                        this.isMaximized = false;
+                        this.element.classList.remove('maximized');
+                        this.element.style.left = this.prevBounds.x + 'px';
+                        this.element.style.top = this.prevBounds.y + 'px';
+                        this.element.style.width = this.prevBounds.w + 'px';
+                        this.element.style.height = this.prevBounds.h + 'px';
+                    }
+                    this.activate();
+                    this.scrollToBottom();
+                }
+
+                toggleMaximize() {
+                    if (this.isMinimized) this.restore();
+                    if (this.isMaximized) {
+                        this.restore();
+                    } else {
+                        this.prevBounds = {
+                            x: parseInt(this.element.style.left),
+                            y: parseInt(this.element.style.top),
+                            w: parseInt(this.element.style.width),
+                            h: parseInt(this.element.style.height)
+                        };
+                        this.isMaximized = true;
+                        this.element.classList.add('maximized');
+                        this.element.style.top = '0px';
+                        this.element.style.left = '0px';
+                        this.element.style.width = '100%';
+                        this.element.style.height = '100%';
+                        this.activate();
+                    }
+                }
+
+                close() {
+                    if (windows.length <= 1) {
+                        this.clearContent();
+                        return;
+                    }
+                    this.destroy();
+                    windows = windows.filter(w => w.id !== this.id);
+                    if (activeWindowId === this.id) {
+                        activeWindowId = null;
+                        const next = windows.find(w => !w.isMinimized);
+                        if (next) next.activate();
+                    }
+                }
+
+                clearContent() {
+                    if (this.terminalEl) {
+                        this.terminalEl.innerHTML = '';
+                        this.totalLinesRendered = 0;
+                        this.currentLineEl = null;
+                        this.cursorEl = null;
+                        this.contentBuffer = '';
+                        this.ensureCursor();
+                        const banner = pick(STARTUP_BANNERS);
+                        const bannerSpan = document.createElement('span');
+                        bannerSpan.className = 'line banner';
+                        bannerSpan.textContent = banner + '\n\n';
+                        this.terminalEl.insertBefore(bannerSpan, this.cursorEl);
+                        this.totalLinesRendered++;
+                        this.scrollToBottom();
+                    }
+                }
+
+                destroy() {
+                    if (this.element && this.element.parentNode) this.element.parentNode.removeChild(this.element);
+                    if (this.taskbarItem && this.taskbarItem.parentNode) this.taskbarItem.parentNode.removeChild(this.taskbarItem);
+                }
+
+                onTitlebarMouseDown(e) {
+                    if (e.target.classList.contains('win-btn')) return;
+                    e.preventDefault();
+                    const win = this.element;
+                    const startX = e.clientX, startY = e.clientY;
+                    const origLeft = parseInt(win.style.left), origTop = parseInt(win.style.top);
+                    const onMove = (ev) => {
+                        win.style.left = (origLeft + ev.clientX - startX) + 'px';
+                        win.style.top = (origTop + ev.clientY - startY) + 'px';
+                    };
+                    const onUp = () => {
+                        document.removeEventListener('mousemove', onMove);
+                        document.removeEventListener('mouseup', onUp);
+                    };
+                    document.addEventListener('mousemove', onMove);
+                    document.addEventListener('mouseup', onUp);
+                }
+
+                onResizeStart(e, direction) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const win = this.element;
+                    const startX = e.clientX, startY = e.clientY;
+                    const origLeft = parseInt(win.style.left), origTop = parseInt(win.style.top);
+                    const origWidth = parseInt(win.style.width), origHeight = parseInt(win.style.height);
+                    const minW = 280, minH = 180;
+                    const onMove = (ev) => {
+                        const dx = ev.clientX - startX, dy = ev.clientY - startY;
+                        let newLeft = origLeft, newTop = origTop, newW = origWidth, newH = origHeight;
+                        if (direction.includes('right')) newW = Math.max(minW, origWidth + dx);
+                        if (direction.includes('left')) { newW = Math.max(minW, origWidth - dx); if (newW > minW) newLeft = origLeft + dx; }
+                        if (direction.includes('bottom')) newH = Math.max(minH, origHeight + dy);
+                        if (direction.includes('top')) { newH = Math.max(minH, origHeight - dy); if (newH > minH) newTop = origTop + dy; }
+                        win.style.left = newLeft + 'px';
+                        win.style.top = newTop + 'px';
+                        win.style.width = newW + 'px';
+                        win.style.height = newH + 'px';
+                    };
+                    const onUp = () => {
+                        document.removeEventListener('mousemove', onMove);
+                        document.removeEventListener('mouseup', onUp);
+                    };
+                    document.addEventListener('mousemove', onMove);
+                    document.addEventListener('mouseup', onUp);
+                }
+            }
+
+            /* ============================================================
+               HELPERS
+               ============================================================ */
+            let zIndexCounter = 100;
+            function getNextZIndex() { return zIndexCounter++; }
+
+            function createWindow(title) {
+                const win = new TerminalWindow(windowIdCounter++, title);
+                windows.push(win);
+                win.activate();
+                return win;
+            }
+
+            function getActiveWindow() {
+                return windows.find(w => w.id === activeWindowId) || null;
+            }
+
+            /* ============================================================
+               CONTENT GENERATORS
+               ============================================================ */
+            const CODE_SNIPPETS = [
+                `#include <iostream>\nusing namespace std;\nint main() {\n  int primes[100]; int count=0;\n  for(int n=2;n<500;n++){\n    bool isPrime=true;\n    for(int d=2;d*d<=n;d++) if(n%d==0){isPrime=false;break;}\n    if(isPrime) primes[count++]=n;\n  }\n  cout<<"Found "<<count<<" primes."<<endl;\n  return 0;\n}`,
+                `class Node:\n  def __init__(self,v): self.value=v; self.next=None\nclass LinkedList:\n  def __init__(self): self.head=None\n  def append(self,v):\n    node=Node(v)\n    if not self.head: self.head=node; return\n    cur=self.head\n    while cur.next: cur=cur.next\n    cur.next=node`,
+                `async function fetchUser(id){\n  const res=await fetch('/api/users/'+id);\n  if(!res.ok) throw new Error("fail");\n  return res.json();\n}`,
+                `struct Packet{uint32_t id; uint16_t len; uint8_t flags; uint8_t payload[256];};\nint process(struct Packet *p){if(!p)return -1; checksum(p->payload,p->len); return 0;}`
+            ];
+
+            function generateBinaryChunk() {
+                let out = "";
+                for (let i = 0; i < 15; i++) {
+                    let bits = "";
+                    for (let b = 0; b < 32 + Math.floor(Math.random() * 40); b++) bits += Math.random() < 0.5 ? "0" : "1";
+                    out += bits + "\n";
+                }
+                return out;
+            }
+
+            const TERMINAL_COMMANDS = [
+                `user@kali:~$ nmap -sV 10.0.0.14\nStarting Nmap 7.94 ...\nPORT     STATE SERVICE VERSION\n22/tcp   open  ssh     OpenSSH 8.9p1\n443/tcp  open  https   Apache httpd 2.4.57\nuser@kali:~$ hydra -l admin -P rockyou.txt ssh://10.0.0.14`,
+                `user@kali:~$ python3 exploit.py --target 192.168.1.82\n[*] Sending payload stage 1...\n[+] Connection established.\n[*] Escalating privileges...`,
+                `user@kali:~$ tcpdump -i eth0 -nn 'port 443'\n12:34:56.789 IP 10.0.0.5.443 > 203.0.113.42.58234: Flags [P.], seq 1:100`
+            ];
+
+            const STARTUP_BANNERS = [
+                `====================================\n   SECURE SHELL ACCESS INITIALIZED\n====================================`,
+                `>>> CONNECTION ESTABLISHED\n>>> ENCRYPTION: AES-256 ACTIVE`,
+                `root access granted.\ninitializing kernel modules... done.`
+            ];
+
+            function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+            function generateBlock(mode) {
+                if (mode === 'code') return pick(CODE_SNIPPETS) + "\n\n";
+                if (mode === 'binary') return generateBinaryChunk();
+                if (mode === 'terminal') return pick(TERMINAL_COMMANDS) + "\n\n";
+                return "";
+            }
+
+            function generateLoadingSequence() {
+                const seqs = [
+                    `[*] Network scan initiated...\n[${progressBar(23)}] 23% - Probing 192.168.1.1\n[${progressBar(67)}] 67% - Found open port 22 on 192.168.1.14\n[${progressBar(100)}] 100% - Scan complete.\n`,
+                    `$ gcc exploit.c -o exploit\nCompiling... [${progressBar(45)}] 45%\nLinking... [${progressBar(100)}] Build successful.\n`,
+                    `[*] Downloading payload...\n[====>            ] 18% - 47 KB / 260 KB\n[================] 100% - 260 KB\n`
+                ];
+                return pick(seqs);
+            }
+
+            function progressBar(pct) {
+                const total = 16;
+                const filled = Math.round((pct / 100) * total);
+                return '█'.repeat(filled) + '░'.repeat(total - filled);
+            }
+
+            /* ============================================================
+               SOUND
+               ============================================================ */
+            function playClick() {
+                if (!soundOn) return;
+                try {
+                    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'square';
+                    osc.frequency.value = 900 + Math.random() * 500;
+                    gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.04);
+                    osc.connect(gain).connect(audioCtx.destination);
+                    osc.start();
+                    osc.stop(audioCtx.currentTime + 0.04);
+                } catch(e) {}
+            }
+
+            /* ============================================================
+               AUTO-TYPE
+               ============================================================ */
+            function charsPerKeypress() { return Math.max(1, Math.round(parseInt(speedSlider.value) * 1.8)); }
+
+            function startAutoType() {
+                stopAutoType();
+                autoTypeOn = true;
+                autoTypeBtn.textContent = 'Auto: On';
+                autoTypeBtn.classList.add('active');
+                autoTypeInterval = setInterval(() => {
+                    const win = getActiveWindow();
+                    if (!win || win.isMinimized) return;
+                    win.revealChars(charsPerKeypress() + Math.floor(Math.random() * 2));
+                    playClick();
+                    if (Math.random() < 0.03 && win.terminalEl) {
+                        win.terminalEl.classList.add('glitch-flash');
+                        setTimeout(() => win.terminalEl.classList.remove('glitch-flash'), 150);
+                    }
+                }, 85);
+            }
+
+            function stopAutoType() {
+                autoTypeOn = false;
+                if (autoTypeInterval) { clearInterval(autoTypeInterval); autoTypeInterval = null; }
+                autoTypeBtn.textContent = 'Auto: Off';
+                autoTypeBtn.classList.remove('active');
+            }
+
+            function toggleAutoType() {
+                if (autoTypeOn) stopAutoType();
+                else startAutoType();
+            }
+
+            /* ============================================================
+               KEYBOARD INPUT
+               ============================================================ */
+            window.addEventListener('keydown', function(e) {
+                if (e.key === 'F11' || e.ctrlKey || e.metaKey || e.altKey) return;
+                if (e.key === 'Escape') {
+                    if (document.fullscreenElement) document.exitFullscreen();
+                    return;
+                }
+                const tag = document.activeElement.tagName;
+                if (tag === 'SELECT' || tag === 'INPUT' || tag === 'BUTTON') return;
+                if (autoTypeOn) {
+                    stopAutoType();
+                    return;
+                }
+                e.preventDefault();
+                const win = getActiveWindow();
+                if (!win || win.isMinimized) return;
+                win.revealChars(charsPerKeypress());
+                playClick();
+            });
+
+            /* ============================================================
+               TOOLBAR EVENTS
+               ============================================================ */
+            modeSelect.addEventListener('change', () => {
+                windows.forEach(w => { w.contentBuffer = ''; w.currentLineEl = null; });
+            });
+            themeSelect.addEventListener('change', () => setTheme(themeSelect.value));
+            fontSlider.addEventListener('input', () => {
+                document.documentElement.style.setProperty('--font-size', fontSlider.value + 'px');
+            });
+            autoTypeBtn.addEventListener('click', toggleAutoType);
+            soundToggle.addEventListener('click', () => {
+                soundOn = !soundOn;
+                soundToggle.textContent = 'Sound: ' + (soundOn ? 'On' : 'Off');
+                if (soundOn && !audioCtx) try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+            });
+            fullscreenBtn.addEventListener('click', () => {
+                if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
+                else document.exitFullscreen();
+            });
+            clearBtn.addEventListener('click', () => {
+                const win = getActiveWindow();
+                if (win) win.clearContent();
+            });
+            newWindowBtn.addEventListener('click', () => createWindow());
+
+            /* ============================================================
+               FULLSCREEN SYNC
+               ============================================================ */
+            document.addEventListener('fullscreenchange', () => {
+                fullscreenBtn.textContent = document.fullscreenElement ? 'Exit Fullscreen' : 'Fullscreen';
+            });
+
+            /* ============================================================
+               RANDOM GLITCHES
+               ============================================================ */
+            function randomGlitch() {
+                windows.forEach(w => {
+                    if (w.terminalEl && w.element.style.display !== 'none' && Math.random() < 0.25) {
+                        w.terminalEl.classList.add('glitch-flash');
+                        setTimeout(() => w.terminalEl.classList.remove('glitch-flash'), 150);
+                    }
+                });
+                setTimeout(randomGlitch, 4000 + Math.random() * 12000);
+            }
+            setTimeout(randomGlitch, 8000);
+
+            /* ============================================================
+               INIT
+               ============================================================ */
+            function init() {
+                createWindow('root@kali:~#');
+            }
+            init();
+        })();
+    </script>
+</body>
+</html>
