@@ -1,4 +1,4 @@
-# Hacker Typer – Desktop Windows
+# Haxer
 
 A fake hacker‑vibe terminal simulator that feels like a real desktop environment.  
 Open multiple windows, drag and resize them, toggle auto‑typing, and watch the code scroll by.
